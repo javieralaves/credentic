@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -93,14 +94,6 @@ export default function Home() {
     setSelectedUser(null)
     setSelectedCredId("")
     setValueFields({})
-  }
-
-  const assignedCredentialNames = (userId: string) => {
-    const arr = assignments[userId] || []
-    return arr
-      .map((a) => credentials.find((c) => c.id === a.credentialId)?.name ?? "")
-      .filter(Boolean)
-      .join(", ")
   }
 
   const credentialAssignedCount = (credId: string) => {
@@ -204,14 +197,47 @@ export default function Home() {
             {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell>{user.name}</TableCell>
-                <TableCell>{assignedCredentialNames(user.id)}</TableCell>
+                <TableCell className="space-x-1">
+                  {assignments[user.id]?.map((a, idx) => {
+                    const cred = credentials.find((c) => c.id === a.credentialId)
+                    if (!cred) return null
+                    return (
+                      <Dialog key={idx}>
+                        <DialogTrigger asChild>
+                          <Badge variant="secondary" className="cursor-pointer">
+                            {cred.name}
+                          </Badge>
+                        </DialogTrigger>
+                        <DialogContent className="space-y-2">
+                          <DialogHeader>
+                            <DialogTitle>{cred.name}</DialogTitle>
+                          </DialogHeader>
+                          {cred.properties.map((p) => (
+                            <div key={p} className="text-sm">
+                              <span className="font-medium mr-1">{p}:</span>
+                              {a.values[p]}
+                            </div>
+                          ))}
+                        </DialogContent>
+                      </Dialog>
+                    )
+                  })}
+                </TableCell>
                 <TableCell className="text-right">
                   <Dialog
                     open={selectedUser?.id === user.id}
-                    onOpenChange={(open) => !open && setSelectedUser(null)}
+                    onOpenChange={(open) => {
+                      if (open) {
+                        setSelectedUser(user)
+                      } else {
+                        setSelectedUser(null)
+                        setSelectedCredId("")
+                        setValueFields({})
+                      }
+                    }}
                   >
                     <DialogTrigger asChild>
-                      <Button size="sm">Assign credential</Button>
+                      <Button size="sm">Add credential</Button>
                     </DialogTrigger>
                     <DialogContent className="space-y-4">
                       <DialogHeader>
