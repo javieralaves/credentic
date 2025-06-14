@@ -1,8 +1,16 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import {
   Table,
   TableBody,
@@ -10,179 +18,169 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-
-interface Property {
-  key: string;
-  value: string;
-}
+} from "@/components/ui/table"
 
 interface Credential {
-  id: string;
-  name: string;
-  properties: Property[];
-  assignedUserIds: string[];
+  id: string
+  name: string
+  properties: string[]
 }
 
 interface User {
-  id: string;
-  name: string;
+  id: string
+  name: string
+}
+
+interface UserCredential {
+  credentialId: string
+  values: Record<string, string>
 }
 
 const initialUsers: User[] = [
   { id: "1", name: "Alice" },
   { id: "2", name: "Bob" },
   { id: "3", name: "Charlie" },
-];
+]
 
 export default function Home() {
-  const [users] = useState<User[]>(initialUsers);
-  const [credentials, setCredentials] = useState<Credential[]>([]);
+  const [users] = useState<User[]>(initialUsers)
+  const [credentials, setCredentials] = useState<Credential[]>([])
+  const [assignments, setAssignments] = useState<Record<string, UserCredential[]>>({})
 
-  const [name, setName] = useState("");
-  const [propsList, setPropsList] = useState<Property[]>([
-    { key: "", value: "" },
-  ]);
+  // new credential dialog state
+  const [credName, setCredName] = useState("")
+  const [propList, setPropList] = useState<string[]>([""])
 
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const addProp = () => setPropList((prev) => [...prev, ""])
+  const updateProp = (idx: number, value: string) =>
+    setPropList((prev) => prev.map((p, i) => (i === idx ? value : p)))
+  const removeProp = (idx: number) =>
+    setPropList((prev) => prev.filter((_, i) => i !== idx))
 
-  const resetForm = () => {
-    setName("");
-    setPropsList([{ key: "", value: "" }]);
-    setEditingId(null);
-  };
-
-  const addPropertyField = () => {
-    setPropsList([...propsList, { key: "", value: "" }]);
-  };
-
-  const updateProp = (index: number, field: "key" | "value", value: string) => {
-    setPropsList((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  };
-
-  const removeProp = (index: number) => {
-    setPropsList((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const submitCredential = () => {
-    if (!name.trim()) return;
-    const cleanProps = propsList.filter((p) => p.key.trim());
-    if (editingId) {
-      setCredentials((prev) =>
-        prev.map((c) =>
-          c.id === editingId ? { ...c, name, properties: cleanProps } : c,
-        ),
-      );
-    } else {
-      const newCred: Credential = {
-        id: Date.now().toString(),
-        name,
-        properties: cleanProps,
-        assignedUserIds: [],
-      };
-      setCredentials((prev) => [...prev, newCred]);
+  const createCredential = () => {
+    if (!credName.trim()) return
+    const cleanProps = propList.map((p) => p.trim()).filter(Boolean)
+    const newCred: Credential = {
+      id: Date.now().toString(),
+      name: credName,
+      properties: cleanProps,
     }
-    resetForm();
-  };
+    setCredentials((prev) => [...prev, newCred])
+    setCredName("")
+    setPropList([""])
+  }
 
-  const editCredential = (cred: Credential) => {
-    setName(cred.name);
-    setPropsList(
-      cred.properties.length ? cred.properties : [{ key: "", value: "" }],
-    );
-    setEditingId(cred.id);
-  };
+  // assign credential dialog state
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [selectedCredId, setSelectedCredId] = useState("")
+  const [valueFields, setValueFields] = useState<Record<string, string>>({})
 
-  const deleteCredential = (id: string) => {
-    setCredentials((prev) => prev.filter((c) => c.id !== id));
-  };
+  const assignCredential = () => {
+    if (!selectedUser || !selectedCredId) return
+    const cred = credentials.find((c) => c.id === selectedCredId)
+    if (!cred) return
+    const values: Record<string, string> = {}
+    cred.properties.forEach((p) => {
+      values[p] = valueFields[p] ?? ""
+    })
+    setAssignments((prev) => {
+      const userCreds = prev[selectedUser.id] ?? []
+      return {
+        ...prev,
+        [selectedUser.id]: [...userCreds, { credentialId: cred.id, values }],
+      }
+    })
+    setSelectedUser(null)
+    setSelectedCredId("")
+    setValueFields({})
+  }
 
-  const toggleAssignment = (credId: string, userId: string) => {
-    setCredentials((prev) =>
-      prev.map((c) =>
-        c.id === credId
-          ? {
-              ...c,
-              assignedUserIds: c.assignedUserIds.includes(userId)
-                ? c.assignedUserIds.filter((u) => u !== userId)
-                : [...c.assignedUserIds, userId],
-            }
-          : c,
-      ),
-    );
-  };
+  const assignedCredentialNames = (userId: string) => {
+    const arr = assignments[userId] || []
+    return arr
+      .map((a) => credentials.find((c) => c.id === a.credentialId)?.name ?? "")
+      .filter(Boolean)
+      .join(", ")
+  }
+
+  const credentialAssignedCount = (credId: string) => {
+    return Object.values(assignments).filter((arr) =>
+      arr.some((a) => a.credentialId === credId),
+    ).length
+  }
 
   return (
     <div className="container mx-auto space-y-10 p-6">
       <section className="space-y-4">
-        <h1 className="text-2xl font-bold">Credentials</h1>
-        <div className="rounded-md border p-4 space-y-4">
-          <h2 className="font-semibold">
-            {editingId ? "Edit Credential" : "New Credential"}
-          </h2>
-          <Input
-            placeholder="Credential name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          {propsList.map((prop, idx) => (
-            <div key={idx} className="flex gap-2">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Credentials</h1>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button>New credential</Button>
+            </DialogTrigger>
+            <DialogContent className="space-y-4">
+              <DialogHeader>
+                <DialogTitle>New Credential</DialogTitle>
+              </DialogHeader>
               <Input
-                placeholder="Property key"
-                value={prop.key}
-                onChange={(e) => updateProp(idx, "key", e.target.value)}
+                placeholder="Credential name"
+                value={credName}
+                onChange={(e) => setCredName(e.target.value)}
               />
-              <Input
-                placeholder="Value"
-                value={prop.value}
-                onChange={(e) => updateProp(idx, "value", e.target.value)}
-              />
-              <Button type="button" onClick={() => removeProp(idx)}>
-                Remove
-              </Button>
-            </div>
-          ))}
-          <div className="flex gap-2">
-            <Button type="button" onClick={addPropertyField}>
-              Add Property
-            </Button>
-            <Button type="button" onClick={submitCredential}>
-              {editingId ? "Update" : "Create"}
-            </Button>
-            {editingId && (
-              <Button type="button" onClick={resetForm}>
-                Cancel
-              </Button>
-            )}
-          </div>
+              {propList.map((prop, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <Input
+                    placeholder="Property name"
+                    value={prop}
+                    onChange={(e) => updateProp(idx, e.target.value)}
+                  />
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => removeProp(idx)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <Button type="button" onClick={addProp} variant="secondary">
+                  Add property
+                </Button>
+                <Button type="button" onClick={createCredential}>
+                  Create
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
-
         <Table>
-          <TableHead>
+          <TableHeader>
             <TableRow>
-              <TableHeader>Name</TableHeader>
-              <TableHeader>Properties</TableHeader>
-              <TableHeader>Assigned Users</TableHeader>
-              <TableHeader className="text-right">Actions</TableHeader>
+              <TableHead>Name</TableHead>
+              <TableHead>Properties</TableHead>
+              <TableHead className="text-right">Users</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          </TableHead>
+          </TableHeader>
           <TableBody>
             {credentials.map((cred) => (
               <TableRow key={cred.id}>
                 <TableCell>{cred.name}</TableCell>
-                <TableCell>
-                  {cred.properties
-                    .map((p) => `${p.key}: ${p.value}`)
-                    .join(", ")}
+                <TableCell>{cred.properties.join(", ")}</TableCell>
+                <TableCell className="text-right">
+                  {credentialAssignedCount(cred.id)}
                 </TableCell>
-                <TableCell>{cred.assignedUserIds.length}</TableCell>
-                <TableCell className="flex justify-end gap-2">
-                  <Button onClick={() => editCredential(cred)}>Edit</Button>
-                  <Button onClick={() => deleteCredential(cred.id)}>
+                <TableCell className="text-right">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() =>
+                      setCredentials((prev) =>
+                        prev.filter((c) => c.id !== cred.id),
+                      )
+                    }
+                  >
                     Delete
                   </Button>
                 </TableCell>
@@ -193,36 +191,83 @@ export default function Home() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-bold">Assign Credentials to Users</h2>
+        <h2 className="text-2xl font-bold">Users</h2>
         <Table>
-          <TableHead>
+          <TableHeader>
             <TableRow>
-              <TableHeader>User</TableHeader>
-              {credentials.map((cred) => (
-                <TableHeader key={cred.id} className="text-center">
-                  {cred.name}
-                </TableHeader>
-              ))}
+              <TableHead>User</TableHead>
+              <TableHead>Credentials</TableHead>
+              <TableHead className="text-right">Action</TableHead>
             </TableRow>
-          </TableHead>
+          </TableHeader>
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell>{user.name}</TableCell>
-                {credentials.map((cred) => (
-                  <TableCell key={cred.id} className="text-center">
-                    <input
-                      type="checkbox"
-                      checked={cred.assignedUserIds.includes(user.id)}
-                      onChange={() => toggleAssignment(cred.id, user.id)}
-                    />
-                  </TableCell>
-                ))}
+                <TableCell>{assignedCredentialNames(user.id)}</TableCell>
+                <TableCell className="text-right">
+                  <Dialog
+                    open={selectedUser?.id === user.id}
+                    onOpenChange={(open) => !open && setSelectedUser(null)}
+                  >
+                    <DialogTrigger asChild>
+                      <Button size="sm">Assign credential</Button>
+                    </DialogTrigger>
+                    <DialogContent className="space-y-4">
+                      <DialogHeader>
+                        <DialogTitle>Assign Credential</DialogTitle>
+                      </DialogHeader>
+                      <select
+                        className="w-full rounded-md border p-2"
+                        value={selectedCredId}
+                        onChange={(e) => {
+                          setSelectedCredId(e.target.value)
+                          setValueFields({})
+                        }}
+                      >
+                        <option value="">Select credential</option>
+                        {credentials.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      {credentials
+                        .find((c) => c.id === selectedCredId)
+                        ?.properties.map((prop) => (
+                          <Input
+                            key={prop}
+                            placeholder={prop}
+                            value={valueFields[prop] || ""}
+                            onChange={(e) =>
+                              setValueFields((v) => ({
+                                ...v,
+                                [prop]: e.target.value,
+                              }))
+                            }
+                          />
+                        ))}
+                      <DialogFooter>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => setSelectedUser(null)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button type="button" onClick={assignCredential}>
+                          Assign
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </section>
     </div>
-  );
+  )
 }
+
