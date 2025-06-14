@@ -4,6 +4,14 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -21,10 +29,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+interface CredentialProperty {
+  name: string
+  type: "text" | "select" | "date"
+  options?: string[]
+}
+
 interface Credential {
   id: string
   name: string
-  properties: string[]
+  properties: CredentialProperty[]
 }
 
 interface User {
@@ -50,17 +64,26 @@ export default function Home() {
 
   // new credential dialog state
   const [credName, setCredName] = useState("")
-  const [propList, setPropList] = useState<string[]>([""])
+  const [propList, setPropList] = useState<CredentialProperty[]>([
+    { name: "", type: "text" },
+  ])
 
-  const addProp = () => setPropList((prev) => [...prev, ""])
-  const updateProp = (idx: number, value: string) =>
-    setPropList((prev) => prev.map((p, i) => (i === idx ? value : p)))
+  const addProp = () =>
+    setPropList((prev) => [...prev, { name: "", type: "text" }])
+  const updateProp = (idx: number, patch: Partial<CredentialProperty>) =>
+    setPropList((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)))
   const removeProp = (idx: number) =>
     setPropList((prev) => prev.filter((_, i) => i !== idx))
 
   const createCredential = () => {
     if (!credName.trim()) return
-    const cleanProps = propList.map((p) => p.trim()).filter(Boolean)
+    const cleanProps = propList
+      .map((p) => ({
+        ...p,
+        name: p.name.trim(),
+        options: p.type === "select" ? p.options?.filter(Boolean) : undefined,
+      }))
+      .filter((p) => p.name)
     const newCred: Credential = {
       id: Date.now().toString(),
       name: credName,
@@ -68,7 +91,7 @@ export default function Home() {
     }
     setCredentials((prev) => [...prev, newCred])
     setCredName("")
-    setPropList([""])
+    setPropList([{ name: "", type: "text" }])
   }
 
   // assign credential dialog state
@@ -82,7 +105,7 @@ export default function Home() {
     if (!cred) return
     const values: Record<string, string> = {}
     cred.properties.forEach((p) => {
-      values[p] = valueFields[p] ?? ""
+      values[p.name] = valueFields[p.name] ?? ""
     })
     setAssignments((prev) => {
       const userCreds = prev[selectedUser.id] ?? []
@@ -121,19 +144,48 @@ export default function Home() {
                 onChange={(e) => setCredName(e.target.value)}
               />
               {propList.map((prop, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <Input
-                    placeholder="Property name"
-                    value={prop}
-                    onChange={(e) => updateProp(idx, e.target.value)}
-                  />
-                  <Button
-                    variant="secondary"
-                    type="button"
-                    onClick={() => removeProp(idx)}
-                  >
-                    Remove
-                  </Button>
+                <div key={idx} className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Property name"
+                      value={prop.name}
+                      onChange={(e) => updateProp(idx, { name: e.target.value })}
+                    />
+                    <select
+                      className="rounded-md border p-2"
+                      value={prop.type}
+                      onChange={(e) =>
+                        updateProp(idx, {
+                          type: e.target.value as CredentialProperty["type"],
+                        })
+                      }
+                    >
+                      <option value="text">Text</option>
+                      <option value="select">Select</option>
+                      <option value="date">Date</option>
+                    </select>
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      onClick={() => removeProp(idx)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  {prop.type === "select" && (
+                    <Input
+                      placeholder="Options (comma separated)"
+                      value={prop.options?.join(", ") || ""}
+                      onChange={(e) =>
+                        updateProp(idx, {
+                          options: e.target.value
+                            .split(/,/)
+                            .map((o) => o.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                    />
+                  )}
                 </div>
               ))}
               <div className="flex gap-2">
@@ -160,7 +212,11 @@ export default function Home() {
             {credentials.map((cred) => (
               <TableRow key={cred.id}>
                 <TableCell>{cred.name}</TableCell>
-                <TableCell>{cred.properties.join(", ")}</TableCell>
+                <TableCell>
+                  {cred.properties
+                    .map((p) => `${p.name} (${p.type})`)
+                    .join(", ")}
+                </TableCell>
                 <TableCell className="text-right">
                   {credentialAssignedCount(cred.id)}
                 </TableCell>
@@ -213,9 +269,9 @@ export default function Home() {
                             <DialogTitle>{cred.name}</DialogTitle>
                           </DialogHeader>
                           {cred.properties.map((p) => (
-                            <div key={p} className="text-sm">
-                              <span className="font-medium mr-1">{p}:</span>
-                              {a.values[p]}
+                            <div key={p.name} className="text-sm">
+                              <span className="font-medium mr-1">{p.name}:</span>
+                              {a.values[p.name]}
                             </div>
                           ))}
                         </DialogContent>
@@ -260,19 +316,82 @@ export default function Home() {
                       </select>
                       {credentials
                         .find((c) => c.id === selectedCredId)
-                        ?.properties.map((prop) => (
-                          <Input
-                            key={prop}
-                            placeholder={prop}
-                            value={valueFields[prop] || ""}
-                            onChange={(e) =>
-                              setValueFields((v) => ({
-                                ...v,
-                                [prop]: e.target.value,
-                              }))
-                            }
-                          />
-                        ))}
+                        ?.properties.map((prop) => {
+                          const value = valueFields[prop.name] || ""
+                          if (prop.type === "select") {
+                            return (
+                              <Select
+                                key={prop.name}
+                                value={value}
+                                onValueChange={(val) =>
+                                  setValueFields((v) => ({ ...v, [prop.name]: val }))
+                                }
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder={prop.name} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {prop.options?.map((o) => (
+                                    <SelectItem key={o} value={o}>
+                                      {o}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )
+                          }
+                          if (prop.type === "date") {
+                            const parsed = (() => {
+                              const [d, m, y] = value.split("/")
+                              if (!d || !m || !y) return undefined
+                              const year = y.length === 2 ? Number(`20${y}`) : Number(y)
+                              const date = new Date(year, Number(m) - 1, Number(d))
+                              return isNaN(date.getTime()) ? undefined : date
+                            })()
+                            return (
+                              <div key={prop.name} className="space-y-2">
+                                <Input
+                                  placeholder="dd/mm/yy"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setValueFields((v) => ({
+                                      ...v,
+                                      [prop.name]: e.target.value,
+                                    }))
+                                  }
+                                />
+                                <Calendar
+                                  mode="single"
+                                  selected={parsed}
+                                  onSelect={(date) => {
+                                    if (!date) return
+                                    const d = String(date.getDate()).padStart(2, "0")
+                                    const m = String(date.getMonth() + 1).padStart(2, "0")
+                                    const y = String(date.getFullYear()).slice(-2)
+                                    const formatted = `${d}/${m}/${y}`
+                                    setValueFields((v) => ({
+                                      ...v,
+                                      [prop.name]: formatted,
+                                    }))
+                                  }}
+                                />
+                              </div>
+                            )
+                          }
+                          return (
+                            <Input
+                              key={prop.name}
+                              placeholder={prop.name}
+                              value={value}
+                              onChange={(e) =>
+                                setValueFields((v) => ({
+                                  ...v,
+                                  [prop.name]: e.target.value,
+                                }))
+                              }
+                            />
+                          )
+                        })}
                       <DialogFooter>
                         <Button
                           type="button"
