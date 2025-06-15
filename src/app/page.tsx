@@ -180,8 +180,7 @@ export default function Home() {
                         updateProp(idx, {
                           options: e.target.value
                             .split(/,/)
-                            .map((o) => o.trim())
-                            .filter(Boolean),
+                            .map((o) => o.trim()),
                         })
                       }
                     />
