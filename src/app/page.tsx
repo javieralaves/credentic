@@ -71,9 +71,44 @@ export default function Home() {
   const addProp = () =>
     setPropList((prev) => [...prev, { name: "", type: "text" }])
   const updateProp = (idx: number, patch: Partial<CredentialProperty>) =>
-    setPropList((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)))
+    setPropList((prev) =>
+      prev.map((p, i) => {
+        if (i !== idx) return p
+        const next = { ...p, ...patch }
+        if (patch.type) {
+          if (patch.type === "select") {
+            next.options = p.options ?? [""]
+          } else {
+            delete next.options
+          }
+        }
+        return next
+      }),
+    )
   const removeProp = (idx: number) =>
     setPropList((prev) => prev.filter((_, i) => i !== idx))
+  const addOption = (pIdx: number) =>
+    setPropList((prev) =>
+      prev.map((p, i) =>
+        i === pIdx ? { ...p, options: [...(p.options ?? []), ""] } : p,
+      ),
+    )
+  const updateOption = (pIdx: number, oIdx: number, val: string) =>
+    setPropList((prev) =>
+      prev.map((p, i) =>
+        i === pIdx
+          ? { ...p, options: (p.options ?? []).map((o, j) => (j === oIdx ? val : o)) }
+          : p,
+      ),
+    )
+  const removeOption = (pIdx: number, oIdx: number) =>
+    setPropList((prev) =>
+      prev.map((p, i) =>
+        i === pIdx
+          ? { ...p, options: (p.options ?? []).filter((_, j) => j !== oIdx) }
+          : p,
+      ),
+    )
 
   const createCredential = () => {
     if (!credName.trim()) return
@@ -173,17 +208,34 @@ export default function Home() {
                     </Button>
                   </div>
                   {prop.type === "select" && (
-                    <Input
-                      placeholder="Options (comma separated)"
-                      value={prop.options?.join(", ") || ""}
-                      onChange={(e) =>
-                        updateProp(idx, {
-                          options: e.target.value
-                            .split(/,/)
-                            .map((o) => o.trim()),
-                        })
-                      }
-                    />
+                    <div className="space-y-2 rounded-md bg-muted/40 p-2">
+                      {prop.options?.map((opt, oIdx) => (
+                        <div key={oIdx} className="flex gap-2">
+                          <Input
+                            className="flex-1"
+                            placeholder={`Option ${oIdx + 1}`}
+                            value={opt}
+                            onChange={(e) =>
+                              updateOption(idx, oIdx, e.target.value)
+                            }
+                          />
+                          <Button
+                            variant="secondary"
+                            type="button"
+                            onClick={() => removeOption(idx, oIdx)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => addOption(idx)}
+                      >
+                        Add option
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}
